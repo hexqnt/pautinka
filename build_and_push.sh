@@ -107,9 +107,16 @@ for src_path in "${dist_files[@]}"; do
   fi
 done
 
-# HTML переключается после ресурсов; старые хешированные файлы нужны уже открытым вкладкам.
+# HTML переключается после ресурсов, до удаления старых файлов.
 for src_path in "${html_files[@]}"; do
   upload_file "$src_path"
 done
+
+cleanup_options=(--recursive)
+for src_path in "${dist_files[@]}"; do
+  cleanup_options+=(--exclude "${src_path#"$DIST_DIR"/}")
+done
+echo "Removing obsolete files from ${TARGET_BASE_URI}..."
+yc storage s3 rm "${TARGET_BASE_URI}/" "${cleanup_options[@]}"
 
 echo "Publish complete."

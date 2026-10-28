@@ -33,10 +33,11 @@ impl Demo {
                 ui.hyperlink_to("GitHub", "https://github.com/hexqnt/pautinka");
                 ui.weak(concat!("pautinka v", env!("CARGO_PKG_VERSION")));
                 ui.separator();
-                egui::ScrollArea::horizontal()
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| {
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                // Задаём направление до ScrollArea: правая точка отсчёта даёт ложное переполнение при округлении до пикселей.
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    egui::ScrollArea::horizontal()
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
                             let animation_icon = if self.running {
                                 egui::include_image!("../../assets/player-pause.svg")
                             } else {
@@ -87,7 +88,7 @@ impl Demo {
                             });
                             menu(ui, "View", |ui| controls.changed |= self.view_controls(ui));
                         });
-                    });
+                });
             });
         });
         controls.changed |= controls.load != self.scene.load()

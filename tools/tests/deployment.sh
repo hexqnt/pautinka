@@ -26,7 +26,20 @@ MOCK
 cat > "$TEST_DIR/bin/yc" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ "$1" == storage && "$2" == s3 && "$3" == cp ]]
+[[ "$1" == storage && "$2" == s3 ]]
+if [[ "$3" == rm ]]; then
+  [[ "$4" == "s3://$S3_BUCKET/${S3_PREFIX:+demo/stress/}" ]]
+  shift 4
+  [[ "$#" == 7 && "$1" == --recursive ]]
+  [[ "$2" == --exclude && "$3" == app.wasm ]]
+  [[ "$4" == --exclude && "$5" == index.html ]]
+  [[ "$6" == --exclude && "$7" == 'snippets/a file.js' ]]
+  [[ "$(tail -n 1 "$DEPLOY_TEST_LOG")" == */index.html ]]
+  printf 'cleanup\n' >> "$DEPLOY_TEST_LOG"
+  [[ "${DEPLOY_TEST_CLEANUP_FAIL:-0}" == 0 ]]
+  exit
+fi
+[[ "$3" == cp ]]
 source_path="$4"
 destination="$5"
 shift 5
@@ -51,15 +64,23 @@ bash "$PROJECT_DIR/build_and_push.sh" --build-only
 [[ ! -e "$DEPLOY_TEST_LOG" ]]
 bash "$PROJECT_DIR/build_and_push.sh" --upload-only
 mapfile -t uploads < "$DEPLOY_TEST_LOG"
-[[ ${#uploads[@]} == 3 ]]
+[[ ${#uploads[@]} == 4 ]]
 [[ "${uploads[0]}" == s3://test.example.org/demo/stress/app.wasm ]]
 [[ "${uploads[1]}" == 's3://test.example.org/demo/stress/snippets/a file.js' ]]
 [[ "${uploads[2]}" == s3://test.example.org/demo/stress/index.html ]]
+[[ "${uploads[3]}" == cleanup ]]
 [[ ! -e "$DIST_DIR/app.wasm.gz" ]]
 
 rm -- "$DEPLOY_TEST_LOG"
 S3_PREFIX='' bash "$PROJECT_DIR/build_and_push.sh"
-[[ "$(tail -n 1 "$DEPLOY_TEST_LOG")" == s3://test.example.org/index.html ]]
+[[ "$(tail -n 2 "$DEPLOY_TEST_LOG")" == $'s3://test.example.org/index.html\ncleanup' ]]
+
+rm -- "$DEPLOY_TEST_LOG"
+if DEPLOY_TEST_CLEANUP_FAIL=1 bash "$PROJECT_DIR/build_and_push.sh" --upload-only; then
+  echo "Error: a failed cleanup must stop deployment." >&2
+  exit 1
+fi
+[[ "$(tail -n 1 "$DEPLOY_TEST_LOG")" == cleanup ]]
 
 rm -- "$DEPLOY_TEST_LOG"
 if DEPLOY_TEST_UPLOAD_FAIL=1 bash "$PROJECT_DIR/build_and_push.sh" --upload-only; then

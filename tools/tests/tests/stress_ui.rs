@@ -43,6 +43,23 @@ fn pointer(position: egui::Pos2, pressed: bool) -> Event {
 }
 
 #[test]
+fn wide_header_does_not_scroll_at_fractional_display_scales() {
+    for scale in [1.0, 1.1, 1.25, 1.3, 1.5, 1.75, 2.0] {
+        for width in [1024.0, 1024.25, 1024.5, 1024.75, 1280.0, 1440.0, 1441.0] {
+            let mut harness = Harness::builder()
+                .with_size(Vec2::new(width, 960.0))
+                .with_pixels_per_point(scale)
+                .build_ui_state(|ui, demo| demo.show(ui), Demo::default());
+            harness.run_steps(20);
+            assert!(
+                harness.query_by_role(Role::ScrollBar).is_none(),
+                "Unexpected header scrollbar at width {width} and scale {scale}"
+            );
+        }
+    }
+}
+
+#[test]
 fn library_version_and_repository_link_stay_visible_in_the_header() {
     for width in [360.0, 1440.0] {
         let mut harness = harness(Vec2::new(width, 960.0));
