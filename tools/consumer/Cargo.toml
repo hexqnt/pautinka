@@ -1,0 +1,19 @@
+[package]
+name = "pautinka-consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+default = ["egui"]
+egui = ["dep:egui", "pautinka/egui"]
+
+[dependencies]
+pautinka = { path = "../..", version = "0.1.0" }
+egui = { version = "0.37", default-features = false, features = ["default_fonts"], optional = true }
+
+[patch.crates-io]
+pautinka-core = { path = "../../crates/pautinka-core" }
+pautinka-egui = { path = "../../crates/pautinka-egui" }

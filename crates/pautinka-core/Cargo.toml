@@ -1,0 +1,19 @@
+[package]
+name = "pautinka-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Geometry, placement and routing for network diagrams, independent of egui"
+documentation = "https://docs.rs/pautinka-core"
+readme = "README.md"
+keywords = ["graph", "geometry", "routing", "diagram", "spatial-index"]
+categories = ["algorithms", "mathematics", "graphics"]
+include = ["/src/**", "/Cargo.toml", "/README*", "/LICENSE-*"]
+
+[dependencies]
+emath.workspace = true
+
+[lints]
+workspace = true

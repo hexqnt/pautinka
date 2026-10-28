@@ -1,0 +1,74 @@
+[package]
+name = "pautinka-egui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+autoexamples = false
+description = "Interactive graph canvas for egui with borrowed graph data"
+documentation = "https://docs.rs/pautinka-egui"
+readme = "README.md"
+keywords = ["egui", "graph", "network", "diagram", "ui"]
+categories = ["gui", "visualization"]
+include = ["/src/**", "/examples/**", "/Cargo.toml", "/README*", "/LICENSE-*"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+rustc-hash.workspace = true
+egui.workspace = true
+pautinka-core.workspace = true
+smallvec = "1.16"
+tiny-skia = { version = "0.12", default-features = false, features = [
+    "std",
+    "simd",
+] }
+ttf-parser = { version = "0.25.1", optional = true }
+resvg = { version = "0.49.0", default-features = false, optional = true }
+
+[features]
+default = []
+svg = ["dep:ttf-parser", "egui/default_fonts"]
+png = ["svg", "dep:resvg"]
+
+[dev-dependencies]
+eframe = { workspace = true, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
+petgraph = { version = "0.8.3", default-features = false, features = [
+    "std",
+    "stable_graph",
+] }
+
+[[example]]
+name = "shapes"
+
+[[example]]
+name = "basic"
+
+[[example]]
+name = "custom"
+
+[[example]]
+name = "editing"
+
+[[example]]
+name = "petgraph"
+
+[[example]]
+name = "labels"
+
+[[example]]
+name = "groups"
+
+[lints]
+workspace = true
+
+[[example]]
+name = "export"
+required-features = ["png"]

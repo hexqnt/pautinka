@@ -1,0 +1,19 @@
+[package]
+name = "pautinka-ui-tests"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dev-dependencies]
+pautinka-demo = { path = "../../demos/metro" }
+pautinka-stress = { path = "../../demos/stress" }
+egui = { workspace = true, features = ["default_fonts"] }
+egui_kittest.workspace = true
+pautinka-egui.workspace = true
+pautinka-test-support.workspace = true
+
+[lints]
+workspace = true

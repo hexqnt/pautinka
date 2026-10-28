@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111d28">
+  <meta name="description" content="Interactive metro maps of Saint Petersburg and Moscow. A demo of the Pautinka graph library in Rust and WebAssembly.">
+  <title>Pautinka · City connections</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%23111d28%27/%3E%3Cpath d=%27M16 45V19h18a9 9 0 0 1 0 18H16%27 fill=%27none%27 stroke=%27%23eea45b%27 stroke-width=%276%27/%3E%3C/svg%3E">
+  <link data-trunk rel="rust" data-bin="pautinka-demo" data-wasm-opt="z">
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #111d28; color: #e1e7e8; font-family: system-ui, sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #loading { position: absolute; inset: 0; display: grid; place-content: center; gap: 16px; padding: 24px; text-align: center; pointer-events: none; }
+    #loading strong { color: #eea45b; font-size: 38px; letter-spacing: -2px; }
+  </style>
+</head>
+<body>
+  <canvas id="pautinka" aria-label="Interactive metro map of Saint Petersburg and Moscow"></canvas>
+  <div id="loading" role="status"><strong>pautinka</strong><span>City connections · loading the map…</span></div>
+  <noscript>Enable JavaScript and WebAssembly to run the demo.</noscript>
+  <script>
+    const russian = (navigator.language || '').split('-')[0].toLowerCase() === 'ru';
+    const text = (ru, en) => russian ? ru : en;
+    document.documentElement.lang = russian ? 'ru' : 'en';
+    document.title = text('Pautinka · Городские связи', 'Pautinka · City connections');
+    document.querySelector('#loading span').textContent = text('Городские связи · загрузка схемы…', 'City connections · loading the map…');
+    document.getElementById('pautinka').setAttribute('aria-label', text('Интерактивная схема метро Петербурга и Москвы', 'Interactive metro map of Saint Petersburg and Moscow'));
+    window.addEventListener('error', () => {
+      const loading = document.getElementById('loading');
+      if (loading) loading.textContent = text('Не удалось загрузить демо. Перезагрузите страницу в браузере с поддержкой WebAssembly и WebGL2.', 'Unable to load the demo. Please reload the page in a browser with WebAssembly and WebGL2 support.');
+    });
+    window.addEventListener('unhandledrejection', () => {
+      const loading = document.getElementById('loading');
+      if (loading) loading.textContent = text('Не удалось загрузить демо. Проверьте соединение и перезагрузите страницу.', 'Unable to load the demo. Check your connection and reload the page.');
+    });
+  </script>
+</body>
+</html>

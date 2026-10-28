@@ -1,0 +1,22 @@
+[package]
+name = "pautinka-profiling"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+pautinka-test-support.workspace = true
+pautinka-egui.workspace = true
+pautinka-core.workspace = true
+pautinka-stress = { path = "../../demos/stress" }
+allocation-counter = { version = "0.8.1", optional = true }
+
+[features]
+count-allocations = ["dep:allocation-counter"]
+
+[lints]
+workspace = true

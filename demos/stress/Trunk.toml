@@ -1,0 +1,8 @@
+[build]
+target = "index.html"
+dist = "../../target/stress-dist"
+filehash = true
+
+[serve]
+port = 8081
+open = false

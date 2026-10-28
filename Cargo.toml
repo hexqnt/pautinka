@@ -1,0 +1,99 @@
+[package]
+name = "pautinka"
+version.workspace = true
+edition.workspace = true
+description = "Graph diagram geometry with an optional interactive egui canvas"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/pautinka"
+readme = "README.md"
+keywords = ["graph", "diagram", "geometry", "egui", "visualization"]
+categories = ["gui", "visualization", "algorithms"]
+include = ["/src/**", "/Cargo.toml", "/README*", "/LICENSE-*"]
+
+[features]
+default = []
+egui = ["dep:pautinka-egui"]
+svg = ["egui", "pautinka-egui/svg"]
+png = ["svg", "pautinka-egui/png"]
+
+[dependencies]
+pautinka-core.workspace = true
+pautinka-egui = { workspace = true, optional = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[workspace]
+members = [
+    "crates/pautinka-core",
+    "crates/pautinka-egui",
+    "tools/test-support",
+    "tools/tests",
+    "tools/profiling",
+    "tools/xtask",
+    "demos/metro",
+    "demos/stress",
+]
+default-members = [
+    ".",
+    "crates/pautinka-core",
+    "crates/pautinka-egui",
+    "tools/test-support",
+    "tools/tests",
+    "tools/profiling",
+    "tools/xtask",
+    "demos/metro",
+    "demos/stress",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["hexqnt <hexqntlab@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hexqnt/pautinka"
+
+[workspace.dependencies]
+pautinka-core = { path = "crates/pautinka-core", version = "0.1.0" }
+pautinka-egui = { path = "crates/pautinka-egui", version = "0.1.0" }
+pautinka-test-support = { path = "tools/test-support" }
+emath = "0.37"
+rustc-hash = "2.1.3"
+egui = { version = "0.37", default-features = false }
+eframe = { version = "0.37", default-features = false }
+egui_kittest = "0.37"
+egui_extras = { version = "0.37", default-features = false }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+# Геометрия хранится в f32; сужение проверяется на границах, точность промежуточных f64 намеренно ограничивается при возврате.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+# FMA меняет округление; точное сравнение нужно кешам, вырожденной геометрии и регрессионным тестам.
+suboptimal_flops = "allow"
+float_cmp = "allow"
+# Координаты и контрольные точки используют обычные математические имена; цельные алгоритмы и сценарии тестов не дробятся по числу строк.
+many_single_char_names = "allow"
+too_many_lines = "allow"
+# Политики взаимодействия состоят из независимых переключателей, а не взаимоисключающих состояний.
+struct_excessive_bools = "allow"
+# Эти рекомендации не требуют изменений контрактов и повторяющихся атрибутов/секций у каждого простого метода.
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_const_for_fn = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# Явная граница видимости сохраняется и внутри private-модулей при их последующей публикации.
+redundant_pub_crate = "allow"
+# Версии транзитивных платформенных зависимостей задаются egui/eframe.
+multiple_crate_versions = "allow"
+
+[lints]
+workspace = true

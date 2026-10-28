@@ -1,0 +1,48 @@
+# Рост до 1000 вершин, затем 20 секунд на конечной нагрузке. Общий предел — 120 секунд.
+seed = 42
+
+[run]
+duration_secs = 120
+max_nodes = 20000
+hold_secs = 20
+
+[load]
+nodes = 1000
+edges_per_node = 3.0
+
+[growth]
+enabled = true
+interval_secs = 8
+
+[topology]
+locality = 85
+local_radius = 3
+hub_share = 0
+hubs = 4
+backbone = true
+
+[motion]
+animate = false
+fraction = 100
+speed = 1.0
+
+[nodes]
+kind = "mixed"
+colors = 6
+radius = 7.0
+
+[edges]
+# routing = "octilinear"
+routing = "straight"
+direction = "undirected"
+pattern = "solid"
+#crossings = "bridge"
+# crossings = "gap"
+crossings = "none"
+
+[view]
+auto_fit = true
+labels = true
+lod = true
+minimap = true
+grid = true

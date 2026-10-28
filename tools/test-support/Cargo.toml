@@ -1,0 +1,15 @@
+[package]
+name = "pautinka-test-support"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+egui = { workspace = true, features = ["default_fonts"] }
+pautinka-egui.workspace = true
+
+[lints]
+workspace = true
