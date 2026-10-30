@@ -49,4 +49,4 @@ pub use shape::{NodeShape, ShapeError, ShapeKind};
 pub use snapping::{
     SnapGrid, SnapGuide, SnapIndex, SnapKind, SnapKinds, SnapOptions, SnapResult, SnapTarget,
 };
-pub use spatial::{SpatialError, SpatialHandle, SpatialIndex};
+pub use spatial::{SpatialError, SpatialHandle, SpatialIndex, SpatialUpdateMode, SpatialUpdates};

@@ -189,6 +189,73 @@ fn route_part_counts_change_locally_without_rebuilding_the_scene_index() {
 }
 
 #[test]
+fn bulk_motion_and_changing_route_parts_preserve_picking_and_visibility() {
+    let mut graph = TestGraph::default();
+    let mut cache = SpatialCache::default();
+    cache.synchronize(&graph).unwrap();
+    for (round, segments) in [1, 24, 3, 1].into_iter().enumerate() {
+        let before = graph.revision;
+        graph.revision = before.next_geometry();
+        for node in &mut graph.nodes {
+            *node += Vec2::new(30.0, -15.0);
+        }
+        graph.paths = [
+            EdgePath::try_polyline(
+                (0..=segments)
+                    .map(|i| pos2(-200.0 + i as f32 * 30.0, (i % 2) as f32 * 30.0))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap(),
+            EdgePath::try_line(graph.nodes[1], graph.nodes[0]).unwrap(),
+            EdgePath::new(graph.nodes[1], graph.nodes[2], 40.0, 0),
+            EdgePath::new(graph.nodes[2], graph.nodes[2], 0.0, 1),
+            EdgePath::new(graph.nodes[0], graph.nodes[2], -40.0, 0),
+        ];
+        graph.changes.record(
+            before,
+            graph.revision,
+            (0..graph.node_count())
+                .map(Selection::Node)
+                .chain((0..graph.edge_count()).map(Selection::Edge)),
+        );
+        cache.synchronize(&graph).unwrap();
+        assert_eq!(cache.stats().rebuilds, 1);
+        assert_eq!(cache.stats().spatial_refits, round as u64 + 1);
+        assert_eq!(
+            cache.changed_edges_since(before, &graph),
+            Some([0, 1, 2, 3, 4].as_slice())
+        );
+        let mut fresh = SpatialCache::default();
+        fresh.synchronize(&graph).unwrap();
+        assert_eq!(cache.bounds(), fresh.bounds());
+        assert_eq!(cache.stats().spatial_entries, fresh.stats().spatial_entries);
+        assert_eq!(
+            cache.slot_heap_bytes,
+            cache.edge_slots.iter().map(slot_heap_bytes).sum()
+        );
+        for zoom in [0.1, 1.0, 3.0] {
+            for loops in [false, true] {
+                for x in -8..16 {
+                    for y in -8..12 {
+                        let point = pos2(x as f32 * 25.0, y as f32 * 25.0);
+                        let query = Rect::from_center_size(point, Vec2::splat(10.0));
+                        cache.visible(&graph, query, zoom, loops);
+                        fresh.visible(&graph, query, zoom, loops);
+                        assert_eq!(cache.visible_nodes, fresh.visible_nodes);
+                        assert_eq!(cache.visible_edges, fresh.visible_edges);
+                        let point = crate::HitPoint::from_world(point).unwrap();
+                        assert_eq!(
+                            cache.pick(point, zoom, loops, &graph),
+                            fresh.pick(point, zoom, loops, &graph)
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn prepared_cache_checks_instance_and_revision_and_preserves_camera_and_selection() {
     let first = TestGraph::default();
     let mut second = TestGraph::default();
@@ -321,4 +388,63 @@ fn local_updates_deduplicate_changes_and_reset_stamps_on_overflow() {
     );
     assert_eq!(cache.node_stamps[0], 1);
     assert_eq!(cache.edge_stamps[0], 1);
+}
+
+#[test]
+fn sparse_motion_uses_incremental_updates() {
+    let mut graph = TestGraph::default();
+    let mut cache = SpatialCache::default();
+    cache.synchronize(&graph).unwrap();
+    let before = graph.revision;
+    graph.revision = before.next_geometry();
+    graph.nodes[0] += Vec2::X;
+    graph
+        .changes
+        .record(before, graph.revision, [Selection::Node(0)]);
+    cache.synchronize(&graph).unwrap();
+    assert_eq!(cache.stats().spatial_refits, 0);
+    assert_eq!(cache.stats().updated_entries, 1);
+    assert_eq!(cache.stats().rebuilds, 1);
+}
+
+#[test]
+fn rejected_bulk_update_invalidates_the_cache_and_can_be_rebuilt() {
+    let mut graph = TestGraph::default();
+    let mut cache = SpatialCache::default();
+    cache.synchronize(&graph).unwrap();
+    let before = graph.revision;
+    graph.revision = before.next_geometry();
+    for node in &mut graph.nodes {
+        *node += Vec2::splat(1000.0);
+    }
+    graph.changes.record(
+        before,
+        graph.revision,
+        (0..graph.node_count())
+            .map(Selection::Node)
+            .chain((0..graph.edge_count()).map(Selection::Edge)),
+    );
+    graph.edge_margins[0] = f32::NAN;
+    assert_eq!(cache.synchronize(&graph), Err(SpatialError::InvalidBounds));
+    assert!(!cache.ready(&graph));
+    graph.edge_margins[0] = 7.0;
+    cache.synchronize(&graph).unwrap();
+    assert!(cache.ready(&graph));
+    assert_eq!(cache.stats().rebuilds, 2);
+    for &node in &graph.nodes {
+        let index = graph
+            .nodes
+            .iter()
+            .rposition(|&position| position == node)
+            .unwrap();
+        assert_eq!(
+            cache.pick(
+                crate::HitPoint::from_world(node).unwrap(),
+                1.0,
+                true,
+                &graph
+            ),
+            Some(Selection::Node(index))
+        );
+    }
 }

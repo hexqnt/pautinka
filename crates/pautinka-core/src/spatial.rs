@@ -7,6 +7,10 @@ use std::{
 
 use emath::Rect;
 
+mod update;
+
+pub use update::{SpatialUpdateMode, SpatialUpdates};
+
 static NEXT_OWNER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -81,7 +85,8 @@ struct BuildEntry {
 ///
 /// Дубликаты значений допустимы: несколько сегментов могут ссылаться на одно ребро.
 /// Порядок обхода не является порядком рисования. Перестройка инвалидирует все handles.
-/// Перемещения переустанавливают листья и балансируют дерево. Освобождённые узлы и слоты переиспользуются.
+/// Локальные перемещения переустанавливают листья и балансируют дерево; массовые изменения поддерживают общий пересчёт границ.
+/// Освобождённые узлы и слоты переиспользуются.
 pub struct SpatialIndex<K> {
     owner: u64,
     generation: u64,
@@ -91,6 +96,9 @@ pub struct SpatialIndex<K> {
     slot_generations: Vec<u64>,
     free_entries: Vec<u32>,
     free_nodes: Vec<TreeIndex>,
+    // Буфер постройки переиспользуется при перегруппировке после массовых перемещений.
+    build_entries: Vec<BuildEntry>,
+    refit_quality: f64,
     root: Option<TreeIndex>,
     count: usize,
 }
@@ -113,6 +121,7 @@ impl<K> SpatialIndex<K> {
             + self.slot_generations.capacity() * size_of::<u64>()
             + self.free_entries.capacity() * size_of::<u32>()
             + self.free_nodes.capacity() * size_of::<TreeIndex>()
+            + self.build_entries.capacity() * size_of::<BuildEntry>()
     }
 
     /// Некорректный ввод оставляет предыдущий индекс действующим.
@@ -146,7 +155,9 @@ impl<K> SpatialIndex<K> {
         self.slot_generations.resize(entries.len(), 0);
         self.free_entries.reserve(64);
         self.free_nodes.reserve(64);
-        let mut build = Vec::with_capacity(entries.len());
+        let mut build = std::mem::take(&mut self.build_entries);
+        build.clear();
+        build.reserve(entries.len());
         for (ordinal, (value, bounds)) in entries.into_iter().enumerate() {
             self.values.push(value);
             build.push(BuildEntry {
@@ -157,6 +168,8 @@ impl<K> SpatialIndex<K> {
         if !build.is_empty() {
             self.root = Some(self.build(&mut build, None));
         }
+        self.build_entries = build;
+        self.refit_quality = self.quality();
         Ok(())
     }
 
@@ -232,6 +245,67 @@ impl<K> SpatialIndex<K> {
         self.nodes[leaf.offset()].bounds = bounds;
         self.insert_leaf(leaf);
         Ok(())
+    }
+
+    /// Пакет изменений не допускает запросов до восстановления границ дерева при выходе из области видимости.
+    /// Уже применённые изменения сохраняются при ошибке; завершение пакета не инвалидирует handles.
+    pub fn updates(&mut self, mode: SpatialUpdateMode) -> SpatialUpdates<'_, K> {
+        SpatialUpdates::new(self, mode)
+    }
+
+    fn refit_tree(&mut self, index: TreeIndex) -> f64 {
+        if let Children::Branch(left, right) = self.nodes[index.offset()].children {
+            let cost = self.refit_tree(left) + self.refit_tree(right);
+            self.recalculate(index);
+            cost + perimeter(self.nodes[index.offset()].bounds)
+        } else {
+            0.0
+        }
+    }
+
+    fn normalized_cost(&self, cost: f64) -> f64 {
+        self.total_bounds().map_or(0.0, |bounds| {
+            cost / perimeter(bounds).max(f64::MIN_POSITIVE)
+        })
+    }
+
+    fn quality(&self) -> f64 {
+        self.normalized_cost(
+            self.nodes
+                .iter()
+                .filter(|node| matches!(node.children, Children::Branch(..)))
+                .map(|node| perimeter(node.bounds))
+                .sum(),
+        )
+    }
+
+    fn finish_updates(&mut self) {
+        let Some(root) = self.root else {
+            return;
+        };
+        let cost = self.refit_tree(root);
+        // Нормировка исключает перенос и равномерное масштабирование сцены; двукратный рост выявляет потерю пространственной локальности.
+        if self.normalized_cost(cost) > self.refit_quality * 2.0 {
+            self.repartition();
+        }
+    }
+
+    fn repartition(&mut self) {
+        let mut entries = std::mem::take(&mut self.build_entries);
+        entries.clear();
+        for (ordinal, leaf) in self.leaves.iter().enumerate() {
+            if let Some(leaf) = leaf {
+                entries.push(BuildEntry {
+                    ordinal: ordinal as u32,
+                    bounds: self.nodes[leaf.offset()].bounds,
+                });
+            }
+        }
+        self.nodes.clear();
+        self.free_nodes.clear();
+        self.root = Some(self.build(&mut entries, None));
+        self.build_entries = entries;
+        self.refit_quality = self.quality();
     }
 
     fn resolve(&self, handle: SpatialHandle) -> Result<TreeIndex, SpatialError> {
@@ -540,6 +614,8 @@ impl<K> Default for SpatialIndex<K> {
             slot_generations: Vec::new(),
             free_entries: Vec::new(),
             free_nodes: Vec::new(),
+            build_entries: Vec::new(),
+            refit_quality: 0.0,
             root: None,
             count: 0,
         }

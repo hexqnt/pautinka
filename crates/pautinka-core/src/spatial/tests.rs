@@ -4,6 +4,8 @@ use emath::{Pos2, Vec2, pos2};
 
 use super::*;
 
+mod bulk;
+
 fn rect(x: f32, y: f32) -> Rect {
     Rect::from_min_size(pos2(x, y), Vec2::splat(4.0))
 }

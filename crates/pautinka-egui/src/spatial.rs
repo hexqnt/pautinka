@@ -1,7 +1,7 @@
 mod prepared;
 
 use egui::{Rect, Vec2};
-use pautinka_core::{SpatialError, SpatialIndex};
+use pautinka_core::{SpatialError, SpatialIndex, SpatialUpdateMode};
 use smallvec::SmallVec;
 
 use crate::{Canvas, ChangeCoverage, Graph, GraphId, GraphRevision, Selection};
@@ -33,6 +33,8 @@ pub struct CanvasStats {
     pub edge_candidates: usize,
     pub rebuilds: u64,
     pub updated_entries: u64,
+    /// Число завершённых массовых обновлений с общим пересчётом границ BVH.
+    pub spatial_refits: u64,
     pub crossing_rebuilds: u64,
     pub crossing_scanned_edges: u64,
 }
@@ -57,6 +59,7 @@ pub(super) struct SpatialCache {
     pub visible_edges: Vec<usize>,
     rebuilds: u64,
     updated_entries: u64,
+    spatial_refits: u64,
     slot_heap_bytes: usize,
 }
 
@@ -144,6 +147,7 @@ impl SpatialCache {
             edge_candidates: self.visible_edges.len(),
             rebuilds: self.rebuilds,
             updated_entries: self.updated_entries,
+            spatial_refits: self.spatial_refits,
             crossing_rebuilds: 0,
             crossing_scanned_edges: 0,
             snap_rebuilds: 0,
@@ -208,26 +212,37 @@ impl SpatialCache {
         if coverage == ChangeCoverage::Unavailable || invalid {
             return self.rebuild(graph);
         }
+        self.dirty_nodes.sort_unstable();
+        self.dirty_edges.sort_unstable();
+        let dirty_entries = self.dirty_nodes.len()
+            + self.dirty_groups.len()
+            + self
+                .dirty_edges
+                .iter()
+                .map(|&edge| self.edge_slots[edge].len())
+                .sum::<usize>();
+        // От четверти записей линейный обход дешевле повторного подъёма по общим предкам.
+        let mode = if dirty_entries > 0 && dirty_entries >= self.index.len().div_ceil(4) {
+            SpatialUpdateMode::Refit
+        } else {
+            SpatialUpdateMode::Incremental
+        };
+        let mut updates = self.index.updates(mode);
         self.dirty_groups.sort_unstable();
         for &index in &self.dirty_groups {
             self.max_screen_margin = self.max_screen_margin.max(group_margin(graph, index)?);
-            self.index.update(
-                self.index
+            updates.update(
+                updates
                     .handle(graph.node_count() + index)
                     .expect("Indexed group exists"),
                 graph.group(index).frame.bounds(),
             )?;
             self.updated_entries += 1;
         }
-        self.dirty_nodes.sort_unstable();
-        self.dirty_edges.sort_unstable();
         for &index in &self.dirty_nodes {
             let (bounds, margin) = node_bounds(graph, index)?;
             self.max_screen_margin = self.max_screen_margin.max(margin);
-            self.index.update(
-                self.index.handle(index).expect("Indexed node exists"),
-                bounds,
-            )?;
+            updates.update(updates.handle(index).expect("Indexed node exists"), bounds)?;
             self.updated_entries += 1;
         }
         for &edge in &self.dirty_edges {
@@ -237,8 +252,8 @@ impl SpatialCache {
             let previous_heap = slot_heap_bytes(slots);
             let count = path.spatial_chunks().len();
             for &slot in slots.get(count..).unwrap_or_default() {
-                self.index.remove(
-                    self.index
+                updates.remove(
+                    updates
                         .handle(slot as usize)
                         .expect("Indexed route part exists"),
                 )?;
@@ -247,15 +262,15 @@ impl SpatialCache {
             slots.truncate(count);
             for (chunk, bounds) in path.spatial_chunks().enumerate() {
                 if let Some(&slot) = slots.get(chunk) {
-                    self.index.update(
-                        self.index
+                    updates.update(
+                        updates
                             .handle(slot as usize)
                             .expect("Indexed route part exists"),
                         bounds,
                     )?;
                 } else {
                     slots.push(
-                        self.index
+                        updates
                             .insert(
                                 Indexed::Edge {
                                     edge: edge as u32,
@@ -269,6 +284,10 @@ impl SpatialCache {
                 self.updated_entries += 1;
             }
             self.slot_heap_bytes = self.slot_heap_bytes - previous_heap + slot_heap_bytes(slots);
+        }
+        drop(updates);
+        if mode == SpatialUpdateMode::Refit {
+            self.spatial_refits += 1;
         }
         self.key = Some((id, current));
         self.updated_from = Some(previous);

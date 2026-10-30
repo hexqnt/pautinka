@@ -61,6 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 1000.0));
     let mut harness = CpuUiHarness::default();
     let mut model_times = Vec::with_capacity(frames);
+    let mut prepare_times = Vec::with_capacity(frames);
     let mut samples = Vec::with_capacity(frames);
     let step = Duration::from_secs_f64(1.0 / 60.0);
     let mut frame = || {
@@ -68,6 +69,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         let start = Instant::now();
         scene.advance(step, Motion::default());
         let model = start.elapsed();
+        let start = Instant::now();
+        if !model_only {
+            canvas
+                .prepare(&scene)
+                .expect("Generated scene must be valid");
+        }
+        let prepare = start.elapsed();
         let sample = (!model_only).then(|| {
             harness.frame(viewport, Vec::new(), |ui| {
                 egui::CentralPanel::default().show(ui, |ui| {
@@ -75,16 +83,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                 });
             })
         });
-        (model, sample)
+        (model, prepare, sample)
     };
     for _ in 0..5 {
         frame();
     }
     for _ in 0..frames {
-        let (model, sample) = frame();
+        let (model, prepare, sample) = frame();
         model_times.push(model);
         if let Some(mut sample) = sample {
-            sample.ui = model + sample.ui;
+            prepare_times.push(prepare);
+            sample.ui = model + prepare + sample.ui;
             samples.push(sample);
         }
     }
@@ -101,6 +110,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     pautinka_profiling::row(&mut csv, &prefix, "model", &mut model_times);
     if !samples.is_empty() {
+        pautinka_profiling::row(&mut csv, &prefix, "prepare", &mut prepare_times);
         pautinka_profiling::frame_rows(&mut csv, &prefix, "model_and_ui", &samples);
     }
     print!("{csv}");
