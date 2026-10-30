@@ -450,6 +450,18 @@ fn batched_samples_preserve_independent_traversal_rounding_and_cached_values() {
                 EdgePath::try_quadratic([a, b, d]).unwrap(),
                 EdgePath::try_cubic([a, b, c, d]).unwrap(),
                 EdgePath::try_polyline([a, a, b, b, c, d, d]).unwrap(),
+                EdgePath::try_polyline(
+                    (0..SAMPLES)
+                        .map(|i| if i % 2 == 0 { a } else { b })
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap(),
+                EdgePath::try_polyline(
+                    (0..=SAMPLES)
+                        .map(|i| if i % 2 == 0 { a } else { b })
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap(),
                 EdgePath::try_cubic([a; 4]).unwrap(),
                 EdgePath::try_polyline(
                     (0..257)

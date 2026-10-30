@@ -167,11 +167,24 @@ impl EdgePath {
             }
             path.bounds.extend_with(point);
         }
-        path.length = path
-            .points()
-            .windows(2)
-            .map(|pair| pair[0].distance(pair[1]))
-            .sum();
+        // Короткие пути, включая все Безье, повторно используют длины хорд при вычислении стрелок и середины.
+        // Буфер остаётся на стеке; длинные ломаные обходятся без дополнительной аллокации.
+        let mut lengths = [0.0; SAMPLES - 1];
+        let cached_lengths = lengths.get_mut(..path.points().len() - 1);
+        path.length = cached_lengths.map_or_else(
+            || {
+                path.points()
+                    .windows(2)
+                    .map(|pair| pair[0].distance(pair[1]))
+                    .sum()
+            },
+            |lengths| {
+                for (length, pair) in lengths.iter_mut().zip(path.points().windows(2)) {
+                    *length = pair[0].distance(pair[1]);
+                }
+                lengths.iter().sum()
+            },
+        );
         if !path.length.is_finite() {
             return Err(PathError::NonFiniteLength);
         }
@@ -198,11 +211,15 @@ impl EdgePath {
                 * f32::EPSILON
                 * 8.0;
         }
-        let [reverse, midpoint, forward] = path.sample_many([
+        let distances = [
             path.arrow_distance(true),
             path.length * 0.5,
             path.arrow_distance(false),
-        ]);
+        ];
+        let [reverse, midpoint, forward] = lengths.get(..path.points().len() - 1).map_or_else(
+            || path.sample_many(distances),
+            |lengths| path.sample_many_with_lengths(distances, lengths.iter().copied()),
+        );
         path.midpoint = midpoint.position;
         path.arrows = [
             forward,
@@ -292,7 +309,20 @@ impl EdgePath {
     }
 
     // Каждую дистанцию уменьшаем отдельно, сохраняя округление одиночного запроса.
-    fn sample_many<const N: usize>(&self, mut distances: [f32; N]) -> [PathSample; N] {
+    fn sample_many<const N: usize>(&self, distances: [f32; N]) -> [PathSample; N] {
+        self.sample_many_with_lengths(
+            distances,
+            self.points()
+                .windows(2)
+                .map(|pair| pair[0].distance(pair[1])),
+        )
+    }
+
+    fn sample_many_with_lengths<const N: usize>(
+        &self,
+        mut distances: [f32; N],
+        lengths: impl Iterator<Item = f32>,
+    ) -> [PathSample; N] {
         let points = self.points();
         let controls = self.data.bezier_controls();
         let mut samples = [PathSample {
@@ -300,9 +330,8 @@ impl EdgePath {
             tangent: Vec2::ZERO,
         }; N];
         let mut pending = [true; N];
-        for (index, pair) in points.windows(2).enumerate() {
+        for (index, (pair, length)) in points.windows(2).zip(lengths).enumerate() {
             let delta = pair[1] - pair[0];
-            let length = delta.length();
             if length == 0.0 {
                 continue;
             }
